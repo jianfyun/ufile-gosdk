@@ -109,13 +109,12 @@ func (u *UFileRequest) PostFile(filePath, keyName, mimeType string) (err error) 
 //mimeType 如果为空的，会调用 net/http 里面的 DetectContentType 进行检测。
 //keyName 表示传到 ufile 的文件名。
 //小于 100M 的文件推荐使用本接口上传。
-func (u *UFileRequest) PutFile(filePath, keyName, mimeType string) error {
+func (u *UFileRequest) PutFile(file io.Reader, keyName, mimeType string) error {
 	reqURL := u.genFileURL(keyName)
-	file, err := openFile(filePath)
-	if err != nil {
-		return err
+
+	if f, ok := file.(io.Closer); ok {
+		defer f.Close()
 	}
-	defer file.Close()
 
 	b, err := ioutil.ReadAll(file)
 	if err != nil {
@@ -129,7 +128,7 @@ func (u *UFileRequest) PutFile(filePath, keyName, mimeType string) error {
 
 	req.Header.Add("User-Agent", "Go-http-client/1.1")
 	if mimeType == "" {
-		mimeType = getMimeType(file)
+		mimeType = 	http.DetectContentType(b[:512])
 	}
 	req.Header.Add("Content-Type", mimeType)
 
@@ -140,8 +139,8 @@ func (u *UFileRequest) PutFile(filePath, keyName, mimeType string) error {
 
 	authorization := u.Auth.Authorization("PUT", u.BucketName, keyName, req.Header)
 	req.Header.Add("authorization", authorization)
-	fileSize := getFileSize(file)
-	req.Header.Add("Content-Length", strconv.FormatInt(fileSize, 10))
+	fileSize := len(b)
+	req.Header.Add("Content-Length", strconv.FormatInt(int64(fileSize), 10))
 
 	return u.request(req)
 }
